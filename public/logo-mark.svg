@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <linearGradient id="waslaGrad" x1="12" y1="12" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2dd4bf"/>
+      <stop offset="45%" stop-color="#0d9488"/>
+      <stop offset="100%" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="waslaLink" x1="16" y1="48" x2="48" y2="16" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#2dd4bf"/>
+    </linearGradient>
+    <linearGradient id="waslaBg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#163442"/>
+      <stop offset="100%" stop-color="#0b1b23"/>
+    </linearGradient>
+    <filter id="waslaShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.3"/>
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#0d9488" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Card Squircle -->
+  <rect width="64" height="64" rx="16" fill="url(#waslaBg)"/>
+  <rect width="62" height="62" x="1" y="1" rx="15" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1"/>
+
+  <!-- Wasla Symbol (Interlocking "Waw" Connection Loop) -->
+  <g filter="url(#waslaShadow)">
+    <!-- Waw Head Loop & Connector Tail -->
+    <path d="M26 23 C26 17.5 30.5 13.5 36.5 13.5 C42.5 13.5 47 18 47 24 C47 30 42 34.5 35 36 C25 38 15 43 14 50 C24 51.5 39 49.5 49 41" 
+          stroke="url(#waslaGrad)" 
+          stroke-width="5" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- Inner Bridge Loop (Interlocking link that ties the connection) -->
+    <path d="M22 28 C20 33 22 41 29 44 C36 47 43 42 43 36 C43 32 40 29 36 29" 
+          stroke="url(#waslaLink)" 
+          stroke-width="3" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"
+          stroke-dasharray="0 0"/>
+
+    <!-- Golden Commerce Spark (Active Transaction Node) -->
+    <circle cx="43" cy="18" r="4" fill="#f59e0b"/>
+    <circle cx="43" cy="18" r="1.8" fill="#ffffff"/>
+  </g>
+</svg>

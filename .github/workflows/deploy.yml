@@ -1,0 +1,53 @@
+name: Wasla CI-CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Run Unit & Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Prepare Environment File
+        run: cp -n .env.example .env || true
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Test Suite
+        run: npm test
+
+  deploy:
+    name: Zero-Downtime Deployment
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        if: "${{ secrets.SSH_HOST != '' }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: GITHUB_TOKEN
+          script: |
+            cd ${{ secrets.SSH_PATH || '/home/wasla-eg.cloud/deploy' }}
+            chmod +x zero_downtime_deploy.sh
+            ./zero_downtime_deploy.sh $GITHUB_TOKEN
