@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +45,6 @@ export async function createApplication({ env = process.env, store: suppliedStor
     const rawHost = req.get('x-forwarded-host') || req.headers.host || '';
     const incomingHost = rawHost.split(',')[0].trim().split(':')[0].toLowerCase();
     const originHost = new URL(config.origin).hostname.toLowerCase();
-    console.log('DEBUG_HOST:', { incomingHost, originHost, rawHost, headers: req.headers });
     if (config.demoMode && incomingHost && incomingHost !== originHost && incomingHost !== 'wasla-backend' && !/^(127\.0\.0\.1|localhost|::1)$/i.test(incomingHost)) return res.status(403).json({ error: 'الوضع التجريبي متاح محليًا فقط.' });
     next();
   });
