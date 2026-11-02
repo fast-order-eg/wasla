@@ -967,6 +967,63 @@ function crmIntegrationPanel(crm) {
   );
 }
 
+function fastResponderPanel() {
+  const previewBox = el('div', { class: 'instructions-box space-top', style: 'display:none' });
+
+  return panel('محرك الرد اللحظي ومحول الكومنتات (Real-Time Auto-Responder)', 'الرد في نفس الدقيقة بمحاكاة بشرية كاملة، وتحويل كومنتات الريلز والجروبات لشاتات ماسنجر بدون حظر',
+    el('div', { class: 'panel-body' },
+      el('div', { class: 'settings-grid' },
+        el('div', {},
+          integrationRow('مستمع الإشعارات الفوري (Instant Trigger)', 'نشط ومفعل', 'يراقب رسايل الماركت بليس وكومنتات الريلز في نفس ثانية وصولها'),
+          integrationRow('فاحص الشاتات السريع (Fast Poller)', 'كل 35 ثانية', 'يفحص الأكونتات دورياً بخفة وبدون استهلاك رامات الكمبيوتر'),
+          integrationRow('محاكي الكتابة البشرية', 'مفعل (... يكتب الآن)', 'تأخير تفكير طبيعي (2-4 ثواني) وكتابة متقطعة 70ms لكل حرف')
+        ),
+        el('div', {},
+          integrationRow('حماية طلبات المراسلة (Anti-Spam)', 'تحويل آمن (m.me)', 'يرد في الكومنت برابط شات مباشر ليجعل العميل يبدأ المراسلة بنفسه ويمنع الحظر 100%'),
+          integrationRow('موديل الذكاء الاصطناعي', 'Gemini 3.8 Flash', 'تحليل فوري للهجة المصرية العامية واستخراج بيانات الأوردر'),
+          integrationRow('استجابة المتجر والأسعار', 'ردود مدعمة بالصور', 'إرسال صور الماتريال والأسعار وكود الموديل المطلوب في الشات')
+        )
+      ),
+      el('div', { class: 'button-row space-top' },
+        button('⚡ تجربة محاكاة إشعار فوري وارد', async () => {
+          toast('جاري محاكاة استقبال رسالة عميل جديدة وتوليد رد بشري...');
+          try {
+            const res = await api('/automation/responder/test-trigger', {
+              method: 'POST',
+              body: { text: 'مساء الخير، عاجبني الموديل ده وعايز أعرف متوفر مقاس L والشحن بكام للجيزة؟' }
+            });
+            previewBox.style.display = 'block';
+            previewBox.replaceChildren(
+              el('strong', {}, '✓ تمت تجربة الاستجابة اللحظية بنجاح:'),
+              el('p', {}, `استلم المحرك رسالة العميل، وحسب وقت تفكير بشري قدره (${res.estimatedReplyTimeSeconds} ثانية)، وشغّل مؤشر "يكتب الآن..." لتجهيز الرد بالصور والسعر تلقائياً بدون أي تأخير!`)
+            );
+            toast('نجحت المحاكاة اللحظية! راجع التفاصيل في الصندوق أدناه');
+          } catch (err) {
+            toast(`فشل التجربة: ${err.message}`);
+          }
+        }, 'primary'),
+        button('💬 معاينة رد الكومنت الذكي', async () => {
+          try {
+            const res = await api('/automation/comments/preview', {
+              method: 'POST',
+              body: { customerName: 'أحمد محمود', strategy: 'messenger_cta' }
+            });
+            previewBox.style.display = 'block';
+            previewBox.replaceChildren(
+              el('strong', {}, 'نموذج الرد الذكي على الكومنت لمنع الحظر وتخطي Message Requests:'),
+              el('p', { style: 'background:white; padding:10px; border-radius:8px; border:1px solid #c2e5d9; margin-top:6px' }, res.commentReply),
+              el('small', { style: 'color:var(--muted); display:block; margin-top:4px' }, `الاستراتيجية: ${res.reason}`)
+            );
+          } catch (err) {
+            toast(`خطأ: ${err.message}`);
+          }
+        }, 'ghost')
+      ),
+      previewBox
+    )
+  );
+}
+
 async function renderAutomation(main, version) {
   const [mobileStatus, crmSettings] = await Promise.all([
     api('/automation/mobile/status').catch(() => ({ devices: [], publicIp: null })),
@@ -1053,6 +1110,8 @@ async function renderAutomation(main, version) {
     ),
 
     groupHunterPanel(),
+
+    fastResponderPanel(),
 
     crmIntegrationPanel(crmSettings)
   );

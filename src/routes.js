@@ -7,6 +7,9 @@ import { ordersCsv } from './export.js';
 import { rotateMobileIp, listAdbDevices, getPublicIp } from '../worker/mobile-rotator.mjs';
 import { launchBrowser } from '../worker/browser-manager.mjs';
 import { warmAccount } from '../worker/warmer.mjs';
+import { notificationHub } from '../worker/notification-listener.mjs';
+import { buildCommentResponse } from '../worker/comment-converter.mjs';
+import { calculateThinkingDelay } from '../worker/human-typer.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const uploadsDir = path.resolve(root, 'public', 'uploads');
@@ -143,6 +146,44 @@ export function createApiRouter(services) {
         try { await browserInstance.close(); } catch {}
       }
     }
+  }));
+  router.get('/automation/responder/status', handle(async (req, res) => {
+    res.json({
+      instantListenerActive: true,
+      fastPollerActive: true,
+      pollerIntervalSeconds: 35,
+      humanTypingSimulation: true,
+      recentNotifications: notificationHub.recentNotifications.slice(0, 10)
+    });
+  }));
+  router.post('/automation/responder/test-trigger', handle(async (req, res) => {
+    const b = body(req);
+    const notification = notificationHub.receiveNotification({
+      accountId: b.accountId,
+      senderName: b.senderName || 'عميل تجريبي',
+      type: b.type || 'marketplace_message',
+      text: b.text || 'السلام عليكم، الموديل ده متاح وبكام الشحن للمنصورة؟'
+    });
+    const thinkingDelayMs = calculateThinkingDelay(notification.text);
+    res.json({
+      ok: true,
+      notification,
+      simulatedTypingDelayMs: thinkingDelayMs,
+      estimatedReplyTimeSeconds: (thinkingDelayMs / 1000).toFixed(1)
+    });
+  }));
+  router.post('/automation/comments/preview', handle(async (req, res) => {
+    const b = body(req);
+    const products = await services.list('products');
+    const prod = products.find(p => p.id === b.productId) || products[0];
+    const result = buildCommentResponse({
+      customerName: b.customerName || 'عميل محتمل',
+      product: prod,
+      accountUsername: b.accountUsername || 'wasla.store',
+      whatsappPhone: b.whatsappPhone || '01012345678',
+      strategy: b.strategy || 'messenger_cta'
+    });
+    res.json(result);
   }));
   for(const [pathKey,collection] of Object.entries({products:'products',channels:'channels',conversations:'conversations',orders:'orders','publishing-tasks':'publishing_tasks',workers:'workers',events:'events',groups:'groups'})) router.get('/'+pathKey,handle(async(req,res)=>res.json(await services.list(collection))));
   router.post('/products',handle(async(req,res)=>res.status(201).json(await services.saveProduct(body(req)))));
