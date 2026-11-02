@@ -757,6 +757,51 @@ function accountDialog(channel) {
   });
 }
 
+function bulkAccountsDialog() {
+  dialog('إضافة واستيراد حسابات فيسبوك دفعة واحدة', () => el('div', { class: 'form-grid' },
+    field('اكتب أو الصق الحسابات (كل سطر حساب جديد)', 'accountsText', '', {
+      type: 'textarea',
+      full: true,
+      rows: 6,
+      placeholder: 'اكتب كل حساب في سطر منفصل بالشكل:\nاسم الحساب | الإيميل أو الموبايل\nأو مجرد اسم الحساب في كل سطر مثل:\nحساب ماركت بليس 1\nحساب ماركت بليس 2\nحساب ماركت بليس 3'
+    }),
+    selectField('حالة نشاط الحسابات الافتراضية', 'accountStatus', [
+      { value: 'warming', label: '🔥 تحت التدفئة والتنشيط (موصى به للحسابات الجديدة)' },
+      { value: 'ready', label: '✅ جاهز للنشر مباشرة (للحسابات القديمة المستقرة)' }
+    ], 'warming', { full: true })
+  ), async data => {
+    const raw = data.get('accountsText').trim();
+    if (!raw) { toast('أدخل حساب واحد على الأقل'); return; }
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const status = data.get('accountStatus');
+    let count = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const parts = lines[i].split('|').map(p => p.trim());
+      const name = parts[0];
+      const login = parts[1] || '';
+      const profileId = `profile_${Date.now().toString().slice(-4)}_${i + 1}`;
+      await api('/channels', {
+        method: 'POST',
+        body: {
+          name,
+          loginAccount: login,
+          phone: login.startsWith('01') ? login : '',
+          type: 'manual',
+          platform: 'facebook_marketplace',
+          browserProfileId: profileId,
+          accountStatus: status,
+          trustScore: status === 'ready' ? 90 : 70,
+          dailyPostsLimit: 2,
+          dailyGroupsLimit: 4
+        }
+      });
+      count++;
+    }
+    toast(`تم استيراد ${count} حساب بنجاح، وتخصيص بروفايل معزول لكل حساب!`);
+    await refresh();
+  }, 'بدء الاستيراد');
+}
+
 function groupHunterPanel() {
   const panelEl = el('div', { class: 'panel' });
   const keywordsHolder = el('div', { style: 'margin: 12px 0; display:flex; flex-wrap:wrap; gap:8px' });
@@ -944,6 +989,7 @@ async function renderAutomation(main, version) {
     heading('أتمتة وحسابات فيسبوك (Facebook Automation Engine)', 'مزارع الحسابات، التدفئة والمحاكاة البشرية، صياد الجروبات بـ Vertex AI، وربط الـ CRM.',
       el('div', { class: 'button-row' },
         button('+ إضافة حساب فيسبوك', () => accountDialog(), 'primary'),
+        button('📥 استيراد دفعة حسابات', () => bulkAccountsDialog(), 'ghost'),
         button('⚡ تدوير الـ IP الآن', async () => {
           toast('جاري تفعيل وضع الطيران لتدوير الـ IP...');
           try {
