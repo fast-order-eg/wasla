@@ -82,7 +82,11 @@ export async function createApplication({ env = process.env, store: suppliedStor
   return { app, config, store, services, meta, close: () => store.close() };
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+const isTest = process.argv.some(arg => arg.includes('test'));
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isPm2 = Boolean(process.env.PM2_HOME || process.env.pm_id !== undefined);
+
+if (!isTest && (isMain || isPm2)) {
   const instance = await createApplication();
   const server = instance.app.listen(instance.config.port, instance.config.host, () => {
     console.log(`Social Commerce Desk: ${instance.config.origin}`);
