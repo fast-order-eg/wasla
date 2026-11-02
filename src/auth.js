@@ -25,7 +25,8 @@ export function createAuth({ password, demoMode, origin, now = Date.now }) {
   function sameOrigin(req, res, next) {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
     if (req.headers['sec-fetch-site'] === 'cross-site') return res.status(403).json({ error: 'طلب من موقع مختلف غير مسموح.' });
-    const reqOrigin = req.headers.origin;
+    const rawOrigin = req.headers.origin;
+    const reqOrigin = typeof rawOrigin === 'string' ? rawOrigin.split(',')[0].trim() : rawOrigin;
     if (reqOrigin) {
       const allowed = new Set([origin]);
       try {
@@ -46,7 +47,6 @@ export function createAuth({ password, demoMode, origin, now = Date.now }) {
           allowed.add(reqOrigin);
         }
       } catch {}
-      console.log('SAME_ORIGIN_DEBUG:', { reqOrigin, origin, allowed: Array.from(allowed), has: allowed.has(reqOrigin) });
       if (!allowed.has(reqOrigin)) return res.status(403).json({ error: 'مصدر الطلب غير مسموح.' });
     }
     if (!req.is('application/json') && !req.is('multipart/form-data')) return res.status(415).json({ error: 'مطلوب طلب JSON أو رفع ملف.' });
