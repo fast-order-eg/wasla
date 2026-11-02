@@ -65,7 +65,7 @@ ln -nfs "$RELEASE_DIR" "$CURRENT_DIR"
 echo "⚡ Reloading PM2 processes without dropping connections..."
 cd "$CURRENT_DIR"
 if command -v pm2 > /dev/null 2>&1; then
-  pm2 reload ecosystem.config.cjs --update-env || pm2 start ecosystem.config.cjs
+  pm2 restart wasla --update-env || pm2 start src/server.js --name wasla
   pm2 save || true
 else
   echo "⚠️ PM2 not found on PATH. Please ensure PM2 is running."
