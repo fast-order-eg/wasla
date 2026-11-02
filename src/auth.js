@@ -46,6 +46,7 @@ export function createAuth({ password, demoMode, origin, now = Date.now }) {
           allowed.add(reqOrigin);
         }
       } catch {}
+      console.log('SAME_ORIGIN_DEBUG:', { reqOrigin, origin, allowed: Array.from(allowed), has: allowed.has(reqOrigin) });
       if (!allowed.has(reqOrigin)) return res.status(403).json({ error: 'مصدر الطلب غير مسموح.' });
     }
     if (!req.is('application/json') && !req.is('multipart/form-data')) return res.status(415).json({ error: 'مطلوب طلب JSON أو رفع ملف.' });
