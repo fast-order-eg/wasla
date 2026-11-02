@@ -181,7 +181,7 @@ export function createApiRouter(services) {
       product: prod,
       accountUsername: b.accountUsername || 'wasla.store',
       whatsappPhone: b.whatsappPhone || '01012345678',
-      strategy: b.strategy || 'messenger_cta'
+      strategy: b.strategy || 'safe_dm_request'
     });
     res.json(result);
   }));

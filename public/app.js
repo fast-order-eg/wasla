@@ -1002,16 +1002,16 @@ function fastResponderPanel() {
             toast(`فشل التجربة: ${err.message}`);
           }
         }, 'primary'),
-        button('💬 معاينة رد الكومنت الذكي', async () => {
+        button('💬 معاينة رد الكومنت الآمن (بدون روابط)', async () => {
           try {
             const res = await api('/automation/comments/preview', {
               method: 'POST',
-              body: { customerName: 'أحمد محمود', strategy: 'messenger_cta' }
+              body: { customerName: 'أحمد محمود', strategy: 'safe_dm_request' }
             });
             previewBox.style.display = 'block';
             previewBox.replaceChildren(
-              el('strong', {}, 'نموذج الرد الذكي على الكومنت لمنع الحظر وتخطي Message Requests:'),
-              el('p', { style: 'background:white; padding:10px; border-radius:8px; border:1px solid #c2e5d9; margin-top:6px' }, res.commentReply),
+              el('strong', {}, 'نموذج الرد الذكي الآمن على الكومنت (بدون روابط أو أرقام لتجنب الحظر):'),
+              el('p', { style: 'background:white; padding:12px; border-radius:8px; border:1px solid #c2e5d9; margin-top:6px; line-height:1.8' }, res.commentReply),
               el('small', { style: 'color:var(--muted); display:block; margin-top:4px' }, `الاستراتيجية: ${res.reason}`)
             );
           } catch (err) {
