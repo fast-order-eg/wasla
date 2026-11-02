@@ -1,7 +1,7 @@
-import 'dotenv/config';
-import express from 'express';
+import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import express from 'express';
 import { createStore } from './db.js';
 import { createServices } from './domain.js';
 import { createApiRouter } from './routes.js';
@@ -10,6 +10,7 @@ import { createAssistant } from './assistant.js';
 import { createMeta } from './meta.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+dotenv.config({ path: path.join(root, '.env') });
 export function readConfig(env = process.env) {
   const demoMode = env.DEMO_MODE !== 'false';
   const port = Number(env.PORT || 3080);

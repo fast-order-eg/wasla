@@ -25,7 +25,29 @@ export function createAuth({ password, demoMode, origin, now = Date.now }) {
   function sameOrigin(req, res, next) {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
     if (req.headers['sec-fetch-site'] === 'cross-site') return res.status(403).json({ error: 'طلب من موقع مختلف غير مسموح.' });
-    if (req.headers.origin && req.headers.origin !== origin) return res.status(403).json({ error: 'مصدر الطلب غير مسموح.' });
+    const reqOrigin = req.headers.origin;
+    if (reqOrigin) {
+      const allowed = new Set([origin]);
+      try {
+        const originUrl = new URL(origin);
+        allowed.add(`https://${originUrl.hostname}`);
+        allowed.add(`http://${originUrl.hostname}`);
+        allowed.add(`https://www.${originUrl.hostname.replace(/^www\./, '')}`);
+        allowed.add(`http://www.${originUrl.hostname.replace(/^www\./, '')}`);
+        if (originUrl.port) {
+          allowed.add(`http://${originUrl.hostname}:${originUrl.port}`);
+          allowed.add(`https://${originUrl.hostname}:${originUrl.port}`);
+        }
+      } catch {}
+      try {
+        const reqHost = (req.get('x-forwarded-host') || req.headers.host || '').split(',')[0].trim().split(':')[0];
+        const reqOriginHost = new URL(reqOrigin).hostname;
+        if (reqHost && reqOriginHost.toLowerCase() === reqHost.toLowerCase()) {
+          allowed.add(reqOrigin);
+        }
+      } catch {}
+      if (!allowed.has(reqOrigin)) return res.status(403).json({ error: 'مصدر الطلب غير مسموح.' });
+    }
     if (!req.is('application/json') && !req.is('multipart/form-data')) return res.status(415).json({ error: 'مطلوب طلب JSON أو رفع ملف.' });
     next();
   }
