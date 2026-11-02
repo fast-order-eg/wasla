@@ -4,7 +4,7 @@ set -e
 echo "🚀 Starting Zero-Downtime Deployment for Wasla (وصلة)..."
 
 # Configuration
-REPO_TOKEN=$1
+REPO_TOKEN="${1:-$(cat /home/wasla-eg.cloud/deploy/.github_token 2>/dev/null)}"
 if [ -z "$REPO_TOKEN" ]; then
   echo "⚠️ GITHUB_TOKEN not provided as argument. Trying without token..."
   REPO_URL="https://github.com/fast-order-eg/wasla.git"
