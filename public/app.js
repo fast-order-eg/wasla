@@ -1069,7 +1069,13 @@ async function renderAutomation(main, version) {
     
     panel('حسابات فيسبوك ومحاكي التدفئة البشرية (Account Farming & Anti-Ban)', 'محاكاة كاملة للتصفح، السكرول، اللايكات، وقبول طلبات الصداقة لرفع Trust Score وتجنب الحظر',
       fbAccounts.length ? table(['الحساب / الإيميل', 'بروفايل العزل', 'مؤشر الثقة (Trust)', 'الحالة', 'آخر تدفئة', ''], fbAccounts.map(acc => [
-        el('div', {}, el('strong', {}, acc.name), acc.phone || acc.loginAccount ? el('span', { class: 'cell-sub', dir: 'ltr' }, acc.phone || acc.loginAccount) : null),
+        el('div', {},
+          el('div', { style: 'display:flex;align-items:center;gap:6px' },
+            el('strong', {}, acc.name),
+            (acc.facebookUserId || acc.cookies || acc.sessionActive) ? el('span', { class: 'badge good', style: 'font-size:11px;padding:2px 8px' }, `🟢 متصل (${acc.facebookUserId || 'جلسة نشطة'})`) : el('span', { class: 'badge', style: 'font-size:11px;background:#fee2e2;color:#991b1b' }, '⚪ غير متصل')
+          ),
+          acc.phone || acc.loginAccount ? el('span', { class: 'cell-sub', dir: 'ltr' }, acc.phone || acc.loginAccount) : null
+        ),
         el('span', { class: 'badge', style: 'background:#f0f4f8;color:#2c3e50' }, acc.browserProfileId || 'محلي معزول'),
         el('div', { style: 'min-width:90px' },
           el('div', { style: 'display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px' },
@@ -1086,7 +1092,7 @@ async function renderAutomation(main, version) {
           button('🌐 فتح المتصفح', async () => {
             toast(`جاري فتح المتصفح للحساب "${acc.name}"... سجّل دخولك على فيسبوك.`);
             try {
-              const res = await api(`/automation/accounts/${encodeURIComponent(acc.id)}/open-browser`, { method: 'POST' });
+              const res = await api(`/automation/accounts/${encodeURIComponent(acc.id)}/open-browser`, { method: 'POST', body: {} });
               toast(res.message || 'تم فتح المتصفح');
             } catch (err) {
               toast(`فشل فتح المتصفح: ${err.message}`);
@@ -1095,7 +1101,7 @@ async function renderAutomation(main, version) {
           button('🔥 تنشيط وتدفئة', async () => {
             toast(`جاري فتح المتصفح وتدفئة الحساب "${acc.name}" بمحاكاة بشرية...`);
             try {
-              const res = await api(`/automation/accounts/${encodeURIComponent(acc.id)}/warm`, { method: 'POST' });
+              const res = await api(`/automation/accounts/${encodeURIComponent(acc.id)}/warm`, { method: 'POST', body: {} });
               if (res.result?.loggedIn) {
                 toast(`انتهت جلسة التدفئة بنجاح! (${res.result.scrolls} سكرول · ${res.result.likes} لايك)`);
               } else {
