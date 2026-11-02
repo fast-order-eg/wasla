@@ -41,9 +41,9 @@ export async function createApplication({ env = process.env, store: suppliedStor
   app.use((req, res, next) => {
     res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'", 'Cache-Control': 'no-store' });
     if (!config.demoMode) res.set('Strict-Transport-Security', 'max-age=31536000');
-    const incoming = req.headers.host;
-    const originHost = new URL(config.origin).host;
-    if (config.demoMode && incoming && incoming !== originHost && !/^(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(incoming)) return res.status(403).json({ error: 'الوضع التجريبي متاح محليًا فقط.' });
+    const incomingHost = (req.headers.host || '').split(':')[0].toLowerCase();
+    const originHost = new URL(config.origin).hostname.toLowerCase();
+    if (config.demoMode && incomingHost && incomingHost !== originHost && !/^(127\.0\.0\.1|localhost|::1)$/i.test(incomingHost)) return res.status(403).json({ error: 'الوضع التجريبي متاح محليًا فقط.' });
     next();
   });
   const meta = createMeta({ env: { ...env, DEMO_MODE: String(config.demoMode) }, store, services });
