@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import multer from 'multer';
 import { ordersCsv } from './export.js';
 import { rotateMobileIp, listAdbDevices, getPublicIp } from '../worker/mobile-rotator.mjs';
-import { launchBrowser } from '../worker/browser-manager.mjs';
+import { launchBrowser, preparePage } from '../worker/browser-manager.mjs';
 import { warmAccount } from '../worker/warmer.mjs';
 import { notificationHub } from '../worker/notification-listener.mjs';
 import { buildCommentResponse } from '../worker/comment-converter.mjs';
@@ -120,6 +120,20 @@ export function createApiRouter(services) {
   router.post('/automation/mobile/rotate-ip', handle(async (req, res) => {
     const result = await rotateMobileIp();
     res.json(result);
+  }));
+  router.post('/automation/accounts/:id/open-browser', handle(async (req, res) => {
+    const channels = await services.list('channels');
+    const channel = channels.find(c => c.id === req.params.id);
+    if (!channel) return res.status(404).json({ error: 'الحساب غير موجود' });
+    const profileId = channel.browserProfileId || channel.id;
+    try {
+      const browserInstance = await launchBrowser({ profileId, profileName: channel.name, headless: false });
+      const page = await preparePage(browserInstance.browser);
+      await page.goto('https://www.facebook.com', { waitUntil: 'domcontentloaded' }).catch(() => {});
+      res.json({ ok: true, message: 'تم فتح متصفح الحساب بنجاح. سجّل دخولك على فيسبوك ثم أغلق المتصفح بعد الانتهاء.' });
+    } catch (err) {
+      res.status(500).json({ error: `فشل فتح المتصفح: ${err.message}` });
+    }
   }));
   router.post('/automation/accounts/:id/warm', handle(async (req, res) => {
     const channels = await services.list('channels');

@@ -1083,6 +1083,15 @@ async function renderAutomation(main, version) {
         badge(acc.accountStatus || 'warming'),
         acc.lastWarmedAt ? date(acc.lastWarmedAt) : 'لم يتم التنشيط بعد',
         el('div', { class: 'button-row' },
+          button('🌐 فتح المتصفح', async () => {
+            toast(`جاري فتح المتصفح للحساب "${acc.name}"... سجّل دخولك على فيسبوك.`);
+            try {
+              const res = await api(`/automation/accounts/${encodeURIComponent(acc.id)}/open-browser`, { method: 'POST' });
+              toast(res.message || 'تم فتح المتصفح');
+            } catch (err) {
+              toast(`فشل فتح المتصفح: ${err.message}`);
+            }
+          }, 'small'),
           button('🔥 تنشيط وتدفئة', async () => {
             toast(`جاري فتح المتصفح وتدفئة الحساب "${acc.name}" بمحاكاة بشرية...`);
             try {
