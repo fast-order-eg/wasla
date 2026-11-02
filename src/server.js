@@ -23,7 +23,7 @@ export function readConfig(env = process.env) {
   if (!demoMode && url.protocol !== 'https:') throw new Error('Production requires HTTPS APP_ORIGIN.');
   const driver = env.DB_DRIVER || (demoMode ? 'sqlite' : 'mysql');
   if (!['sqlite', 'mysql'].includes(driver)) throw new Error('DB_DRIVER must be sqlite or mysql.');
-  if (!demoMode && driver !== 'mysql') throw new Error('Production requires MySQL; SQLite is local/demo only.');
+  if (!demoMode && driver !== 'mysql' && env.ALLOW_SQLITE_PROD !== 'true') throw new Error('Production requires MySQL; SQLite is local/demo only.');
   if (driver === 'mysql' && !env.MYSQL_URL) throw new Error('MYSQL_URL is required.');
   if (env.WORKER_API_KEY && env.WORKER_API_KEY.length < 32) throw new Error('WORKER_API_KEY must have at least 32 characters.');
   return { demoMode, port, host, origin, password, driver, filename: path.resolve(root, env.SQLITE_PATH || './data/commerce.sqlite'), mysqlUrl: env.MYSQL_URL };
@@ -42,7 +42,8 @@ export async function createApplication({ env = process.env, store: suppliedStor
     res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'", 'Cache-Control': 'no-store' });
     if (!config.demoMode) res.set('Strict-Transport-Security', 'max-age=31536000');
     const incoming = req.headers.host;
-    if (config.demoMode && incoming && !/^(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(incoming)) return res.status(403).json({ error: 'الوضع التجريبي متاح محليًا فقط.' });
+    const originHost = new URL(config.origin).host;
+    if (config.demoMode && incoming && incoming !== originHost && !/^(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(incoming)) return res.status(403).json({ error: 'الوضع التجريبي متاح محليًا فقط.' });
     next();
   });
   const meta = createMeta({ env: { ...env, DEMO_MODE: String(config.demoMode) }, store, services });
