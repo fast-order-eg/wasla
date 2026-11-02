@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-export const COLLECTIONS = new Set(['products', 'channels', 'conversations', 'messages', 'orders', 'publishing_tasks', 'events', 'workers', 'settings']);
+export const COLLECTIONS = new Set(['products', 'channels', 'conversations', 'messages', 'orders', 'publishing_tasks', 'events', 'workers', 'settings', 'groups']);
 function collectionName(value) {
   if (!COLLECTIONS.has(value)) throw new Error('Unknown collection');
   return value;

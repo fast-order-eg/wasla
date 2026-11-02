@@ -46,7 +46,7 @@ async function required(tx, collection, id) {
 async function log(tx, type, entityId, details = {}) {
   await tx.put('events', {id:newId('evt'), type, entityId, details, createdAt:now()});
 }
-const publicCollections = new Set(['products','channels','conversations','orders','publishing_tasks','workers','events']);
+const publicCollections = new Set(['products','channels','conversations','orders','publishing_tasks','workers','events','groups']);
 const messageOrder = (a,b) => a.createdAt.localeCompare(b.createdAt) || (a.sequence || 0) - (b.sequence || 0);
 
 export function createServices(store, { assistant } = {}) {
@@ -124,6 +124,13 @@ export function createServices(store, { assistant } = {}) {
         phone:cleanText(input.phone,'رقم الموبايل',50),
         notes:cleanText(input.notes,'ملاحظات الحساب',1000),
         status:input.type==='manual'?'manual':'unconfigured',autoReply:false,
+        browserProfileId:input.browserProfileId ? cleanText(input.browserProfileId, 'معرف البروفايل المعزول', 100) : '',
+        accountStatus:['ready', 'warming', 'cooldown', 'checkpoint'].includes(input.accountStatus) ? input.accountStatus : 'warming',
+        trustScore:typeof input.trustScore === 'number' ? Math.min(100, Math.max(0, input.trustScore)) : 85,
+        dailyPostsLimit:typeof input.dailyPostsLimit === 'number' ? integer(input.dailyPostsLimit, 'الحد اليومي للنشر', 1, 50) : 2,
+        dailyGroupsLimit:typeof input.dailyGroupsLimit === 'number' ? integer(input.dailyGroupsLimit, 'الحد اليومي للجروبات', 1, 100) : 4,
+        loginAccount:cleanText(input.loginAccount || '', 'حساب الدخول أو الإيميل', 200),
+        lastWarmedAt:input.lastWarmedAt || null,
         externalPageId:cleanText(input.externalPageId,'معرف الصفحة',100),createdAt:now(),updatedAt:now()};
       return store.transaction(async tx => {
         if (record.externalPageId && (await tx.all('channels')).some(c=>c.externalPageId===record.externalPageId)) throw new DomainError('معرف الصفحة مسجل بالفعل',409);
@@ -141,10 +148,25 @@ export function createServices(store, { assistant } = {}) {
           accountUrl: input.accountUrl !== undefined ? safeUrl(input.accountUrl, 'رابط الحساب أو البروفايل') : old.accountUrl,
           phone: input.phone !== undefined ? cleanText(input.phone, 'رقم الموبايل', 50) : old.phone,
           notes: input.notes !== undefined ? cleanText(input.notes, 'ملاحظات الحساب', 1000) : old.notes,
+          browserProfileId: input.browserProfileId !== undefined ? cleanText(input.browserProfileId, 'معرف البروفايل', 100) : old.browserProfileId,
+          accountStatus: input.accountStatus && ['ready', 'warming', 'cooldown', 'checkpoint'].includes(input.accountStatus) ? input.accountStatus : old.accountStatus,
+          trustScore: typeof input.trustScore === 'number' ? Math.min(100, Math.max(0, input.trustScore)) : old.trustScore,
+          dailyPostsLimit: typeof input.dailyPostsLimit === 'number' ? integer(input.dailyPostsLimit, 'الحد اليومي للنشر', 1, 50) : old.dailyPostsLimit,
+          dailyGroupsLimit: typeof input.dailyGroupsLimit === 'number' ? integer(input.dailyGroupsLimit, 'الحد اليومي للجروبات', 1, 100) : old.dailyGroupsLimit,
+          loginAccount: input.loginAccount !== undefined ? cleanText(input.loginAccount, 'حساب الدخول', 200) : old.loginAccount,
+          lastWarmedAt: input.lastWarmedAt !== undefined ? input.lastWarmedAt : old.lastWarmedAt,
           updatedAt: now()
         };
         await tx.put('channels', record);
         return record;
+      });
+    },
+    async deleteChannel(id) {
+      return store.transaction(async tx => {
+        const old = await required(tx, 'channels', id);
+        await tx.remove('channels', id);
+        await log(tx, 'channel_deleted', id, { name: old.name });
+        return { ok: true, id };
       });
     },
     async createConversation(input) {
@@ -274,6 +296,124 @@ export function createServices(store, { assistant } = {}) {
         const result={...old,status:input.status,resultUrl:input.resultUrl===undefined?old.resultUrl:safeUrl(input.resultUrl,'رابط المنشور'),updatedAt:now(),manuallyRecorded:true};
         await tx.put('publishing_tasks',result);await log(tx,'publication_status_recorded',id,{status:input.status});return result;
       });
+    },
+    async saveGroup(input, id) {
+      return store.transaction(async tx => {
+        const old = id ? await required(tx, 'groups', id) : null;
+        const name = cleanText(input.name || old?.name, 'اسم المجموعة', 300, true);
+        const url = safeUrl(input.url || old?.url, 'رابط المجموعة');
+        const type = ['public', 'private'].includes(input.type) ? input.type : (old?.type || 'public');
+        const approval = ['auto', 'admin_review'].includes(input.approval) ? input.approval : (old?.approval || 'auto');
+        const memberCount = typeof input.memberCount === 'number' ? input.memberCount : (old?.memberCount || 0);
+        const productKeyword = cleanText(input.productKeyword || old?.productKeyword, 'الكلمة البحثية أو المنتج', 200);
+        const assignedChannelId = cleanText(input.assignedChannelId || old?.assignedChannelId, 'الحساب المخصص', 100);
+        const status = ['active', 'posted', 'pending', 'skipped'].includes(input.status) ? input.status : (old?.status || 'active');
+
+        const record = {
+          id: old?.id || newId('grp'),
+          name,
+          url,
+          type,
+          approval,
+          memberCount,
+          productKeyword,
+          assignedChannelId,
+          status,
+          createdAt: old?.createdAt || now(),
+          updatedAt: now()
+        };
+        await tx.put('groups', record);
+        return record;
+      });
+    },
+    async deleteGroup(id) {
+      return store.transaction(async tx => {
+        await required(tx, 'groups', id);
+        await tx.remove('groups', id);
+        return { ok: true, id };
+      });
+    },
+    async generateKeywords({ productName, count = 10 } = {}) {
+      if (assistant?.generateKeywords) {
+        return assistant.generateKeywords({ productName, count });
+      }
+      return [
+        `جروبات بيع وشراء ${productName}`,
+        `سوق ${productName} مصر`,
+        `ملابس وتسوق ${productName}`,
+        `جروب سيدات وبنات مصر للتسوق`,
+        `بيع أونلاين جملة وقطاعي ${productName}`,
+        `سوق القاهرة والجيزة للملابس`,
+        `بنات إسكندرية شوبينج وبيع`,
+        `عروض وتخفيضات ${productName}`,
+        `تجار ومحلات ${productName} في مصر`,
+        `جروب محجبات وشوبينج مصر`
+      ].slice(0, count);
+    },
+    async relayOrder(id, { apiUrl, apiKey } = {}) {
+      const order = await store.get('orders', id);
+      if (!order) throw new DomainError('الأوردر غير موجود', 404);
+      const crmSettings = (await store.get('settings', 'crm_settings')) || {};
+      const targetUrl = apiUrl || crmSettings.apiUrl;
+      const targetKey = apiKey || crmSettings.apiKey;
+
+      if (!targetUrl) throw new DomainError('رابط الـ API الخارجي غير مهيأ بعد', 400);
+
+      const payload = {
+        waslaOrderId: order.id,
+        customerName: order.customer?.name || '',
+        phone: order.customer?.phone || '',
+        address: order.customer?.address || '',
+        governorate: order.customer?.governorate || '',
+        productName: order.productName || '',
+        productId: order.productId || '',
+        quantity: order.quantity || 1,
+        totalPiasters: order.totalPiasters || 0,
+        totalEgp: ((order.totalPiasters || 0) / 100).toFixed(2),
+        selectedVariant: order.customer?.variant || order.customer?.color || order.customer?.size || '',
+        source: 'wasla_auto',
+        createdAt: order.createdAt || now()
+      };
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(targetKey ? { 'Authorization': `Bearer ${targetKey}`, 'x-api-key': targetKey } : {})
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        const resText = await res.text();
+        let resJson = null;
+        try { resJson = JSON.parse(resText); } catch { resJson = resText; }
+
+        const syncResult = {
+          success: res.ok,
+          status: res.status,
+          response: resJson,
+          sentAt: now()
+        };
+
+        await store.transaction(async tx => {
+          const fresh = await tx.get('orders', id);
+          if (fresh) {
+            fresh.externalSync = syncResult;
+            fresh.updatedAt = now();
+            await tx.put('orders', fresh);
+          }
+        });
+
+        if (!res.ok) throw new DomainError(`الـ API الخارجي رد بـ ${res.status}: ${resText.slice(0, 150)}`, 502);
+        return syncResult;
+      } catch (err) {
+        if (err instanceof DomainError) throw err;
+        throw new DomainError(`فشل الاتصال بالـ API الخارجي: ${err.message}`, 502);
+      }
     },
     async seedDemo() {
       return store.transaction(async tx=>{

@@ -173,6 +173,89 @@ export function createAssistant({ env = process.env, fetchImpl = fetch } = {}) {
       } catch {
         return { ...fallback, needsHuman: true, reason: 'ai_unavailable_review_required' };
       }
+    },
+    async generateKeywords({ productName = '', count = 10 } = {}) {
+      const fallbackList = [
+        `جروبات بيع وشراء ${productName}`,
+        `سوق ${productName} مصر`,
+        `ملابس وتسوق ${productName}`,
+        `جروب سيدات وبنات مصر للتسوق`,
+        `بيع أونلاين جملة وقطاعي ${productName}`,
+        `سوق القاهرة والجيزة للملابس`,
+        `بنات إسكندرية شوبينج وبيع`,
+        `عروض وتخفيضات ${productName}`,
+        `تجار ومحلات ${productName} في مصر`,
+        `جروب محجبات وشوبينج مصر`
+      ].slice(0, count);
+
+      if (!['gemini', 'vertex'].includes(provider)) return fallbackList;
+
+      try {
+        const prompt = `أنا تاجر في مصر وببيع منتج اسمه "${productName}".
+عايزك تقترحلي قائمة مكونة من ${count} مصطلحات بحث باللهجة المصرية أبحث بيها على فيسبوك عشان ألاقي الجروبات اللي مهتمة تشتري أو تعرض المنتج ده (زي جروبات بيع حريمي، جروبات تسوق، سوق الجملة، جروبات المحافظات).
+اكتب النتيجة كـ JSON كائن يحتوي على مصفوفة نصوص بالشكل:
+{"keywords": ["كلمة 1", "كلمة 2", "..."]}`;
+
+        let requestUrl;
+        let headers;
+        let body;
+
+        if (provider === 'vertex') {
+          const credPath = env.GOOGLE_APPLICATION_CREDENTIALS || 'fast-order-505012-2adde4c0badf.json';
+          const token = await getVertexToken({ credentialsPath: credPath, fetchImpl });
+          let projectId = env.VERTEX_PROJECT_ID;
+          if (!projectId) {
+            try {
+              const key = JSON.parse(fs.readFileSync(path.resolve(credPath), 'utf8'));
+              projectId = key.project_id;
+            } catch {}
+          }
+          const location = env.VERTEX_LOCATION || 'global';
+          const model = env.VERTEX_MODEL_NAME || 'gemini-3.8-flash';
+          requestUrl = location === 'global'
+            ? `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${model}:generateContent`
+            : `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+
+          headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          };
+          body = JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.3, maxOutputTokens: 800, responseMimeType: 'application/json' }
+          });
+        } else {
+          const model = env.GEMINI_MODEL;
+          requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+          headers = {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': env.GEMINI_API_KEY
+          };
+          body = JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.3, maxOutputTokens: 800, responseMimeType: 'application/json' }
+          });
+        }
+
+        const response = await fetchImpl(requestUrl, {
+          method: 'POST',
+          signal: AbortSignal.timeout(timeoutMs),
+          headers,
+          body
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const rawText = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '{}';
+          const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+          const parsed = JSON.parse(cleanJson);
+          if (Array.isArray(parsed.keywords) && parsed.keywords.length > 0) {
+            return parsed.keywords.filter(k => typeof k === 'string' && k.trim()).map(k => k.trim()).slice(0, count);
+          }
+        }
+      } catch {}
+
+      return fallbackList;
     }
   };
 }

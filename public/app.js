@@ -32,9 +32,9 @@ const topbarDate = () => {
   const tp = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Cairo', hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
   return `${dayName}، ${dp} · ${tp}`;
 };
-const state = { authenticated: false, demoMode: false, page: 'overview', health: {}, products: [], channels: [], conversations: [], orders: [], tasks: [], workers: [], selectedConversation: null };
-const pages = { overview: ['نظرة عامة', '◈'], products: ['المنتجات', '▧'], conversations: ['المحادثات', '☷'], orders: ['الأوردرات', '▤'], publishing: ['تجهيز النشر', '↗'], connections: ['القنوات والتشغيل', '⌘'] };
-const labels = { draft: 'مسودة', awaiting_confirmation: 'مستني تأكيد العميل', confirmed: 'مؤكد', preparing: 'قيد التجهيز', shipped: 'تم الشحن', delivered: 'تم التسليم', cancelled: 'ملغي', returned: 'مرتجع', bot_active: 'مساعد الردود متاح', human_takeover: 'متابعة بشرية', closed: 'مغلقة', ready: 'جاهز للنشر', published: 'نشر مسجل يدويًا', pending_approval: 'مستني موافقة الجروب', rejected: 'مرفوض', needs_attention: 'محتاج تدخل', manual: 'متابعة يدوية', unconfigured: 'غير مربوط', connected: 'استقبال إشعارات متحقق', online: 'متصل', offline: 'غير متصل', degraded: 'اتصال غير مستقر' };
+const state = { authenticated: false, demoMode: false, page: 'overview', health: {}, products: [], channels: [], conversations: [], orders: [], tasks: [], workers: [], groups: [], crmSettings: {}, selectedConversation: null };
+const pages = { overview: ['نظرة عامة', '◈'], products: ['المنتجات', '▧'], conversations: ['المحادثات', '☷'], orders: ['الأوردرات', '▤'], publishing: ['تجهيز النشر', '↗'], automation: ['أتمتة وحسابات فيسبوك', '⚡'], connections: ['القنوات والتشغيل', '⌘'] };
+const labels = { draft: 'مسودة', awaiting_confirmation: 'مستني تأكيد العميل', confirmed: 'مؤكد', preparing: 'قيد التجهيز', shipped: 'تم الشحن', delivered: 'تم التسليم', cancelled: 'ملغي', returned: 'مرتجع', bot_active: 'مساعد الردود متاح', human_takeover: 'متابعة بشرية', closed: 'مغلقة', ready: 'جاهز للنشر', published: 'نشر مسجل يدويًا', pending_approval: 'مستني موافقة الجروب', rejected: 'مرفوض', needs_attention: 'محتاج تدخل', manual: 'متابعة يدوية', unconfigured: 'غير مربوط', connected: 'استقبال إشعارات متحقق', online: 'متصل', offline: 'غير متصل', degraded: 'اتصال غير مستقر', warming: 'تحت التدفئة والتنشيط', cooldown: 'فترة تبريد', checkpoint: 'محتاج فحص', auto: 'تلقائي', admin_review: 'موافقة أدمن', active: 'نشط ومتاح' };
 let requestVersion = 0;
 let toastTimer;
 
@@ -504,15 +504,16 @@ async function refresh() {
   const main = document.querySelector('#main');
   main.replaceChildren(el('div', { class: 'loading' }, 'بنحدّث بياناتك…', el('div', { class: 'skeleton' })));
   try {
-    const paths = ['/products', '/channels', '/conversations', '/orders', '/publishing-tasks', '/workers', '/health'];
-    const values = await Promise.all(paths.map(path => api(path)));
+    const paths = ['/products', '/channels', '/conversations', '/orders', '/publishing-tasks', '/workers', '/health', '/groups', '/settings/crm'];
+    const values = await Promise.all(paths.map(path => api(path).catch(() => [])));
     if (version !== requestVersion || !state.authenticated) return;
-    [state.products, state.channels, state.conversations, state.orders, state.tasks, state.workers, state.health] = values;
+    [state.products, state.channels, state.conversations, state.orders, state.tasks, state.workers, state.health, state.groups, state.crmSettings] = values;
     if (state.page === 'overview') await renderOverview(main, version);
     else if (state.page === 'products') renderProducts(main);
     else if (state.page === 'conversations') await renderConversations(main, version);
     else if (state.page === 'orders') renderOrders(main);
     else if (state.page === 'publishing') renderPublishing(main);
+    else if (state.page === 'automation') await renderAutomation(main, version);
     else await renderConnections(main, version);
   } catch (error) { if (version === requestVersion && state.authenticated) main.replaceChildren(errorBox(error), button('حاول تاني', refresh)); }
 }
@@ -669,14 +670,26 @@ function renderOrders(main) {
   const draw = () => { const orders = state.orders.filter(o => !filter.value || o.status === filter.value).slice().reverse(); holder.replaceChildren(orders.length ? panel('متابعة الأوردرات', `${number(orders.length)} أوردر`, orderTable(orders)) : empty('مفيش أوردرات في الحالة دي', 'الأوردر بيتسجّل من داخل المحادثة بعد مراجعة البيانات.')); };
   filter.addEventListener('change', draw); main.replaceChildren(heading('الأوردرات', 'تأكيد واضح، مخزون مضبوط، ومتابعة لحد التسليم.', el('a', {class:'btn', href:'/api/orders/export.csv', download:'orders.csv'}, 'تصدير CSV')), el('div', { class: 'toolbar' }, filter), holder); draw();
 }
-function orderTable(orders) { return table(['العميل / الطلب', 'المنتج', 'الإجمالي', 'الحالة', ''], orders.map(o => [el('div', {}, el('strong', {}, o.customer?.name || 'عميل'), o.customer?.variant ? el('span', { class: 'badge good', style: 'margin-right:6px;font-size:12px' }, o.customer.variant) : null, el('span', { class: 'cell-sub', dir: 'ltr' }, String(o.id).slice(-8))), el('div', {}, productName(o.productId), el('span', { class: 'cell-sub' }, `${number(o.quantity)} قطعة${o.customer?.variant ? ` · ${o.customer.variant}` : ''}`)), money(o.totalPiasters), badge(o.status), button('التفاصيل', () => orderDetails(o), 'small')])); }
+function orderTable(orders) { return table(['العميل / الطلب', 'المنتج', 'الإجمالي', 'الحالة', ''], orders.map(o => [el('div', {}, el('strong', {}, o.customer?.name || 'عميل'), o.customer?.variant ? el('span', { class: 'badge good', style: 'margin-right:6px;font-size:12px' }, o.customer.variant) : null, o.externalSync?.success ? el('span', { class: 'badge', style: 'background:#e8f7f2;color:#117258;font-size:11px;margin-right:4px' }, 'CRM ✓') : null, el('span', { class: 'cell-sub', dir: 'ltr' }, String(o.id).slice(-8))), el('div', {}, productName(o.productId), el('span', { class: 'cell-sub' }, `${number(o.quantity)} قطعة${o.customer?.variant ? ` · ${o.customer.variant}` : ''}`)), money(o.totalPiasters), badge(o.status), button('التفاصيل', () => orderDetails(o), 'small')])); }
 function orderDetails(order) {
   const dlg = el('dialog', { 'aria-label': 'تفاصيل الأوردر' }); const errors = el('div');
   const prod = state.products.find(p => p.id === order.productId);
-  const content = el('div', { class: 'dialog-body' }, el('div', { class: 'status-line space-bottom' }, badge(order.status), el('span', { class: 'subtle' }, date(order.createdAt))), el('div', { class: 'detail-meta' }, [['العميل', order.customer?.name], ['المنتج', productName(order.productId)], ...(prod?.material ? [['الخامة / الماتريال', prod.material]] : []), ['الكمية', number(order.quantity)], ['سعر القطعة', money(order.unitPricePiasters)], ['الشحن', money(order.shippingPiasters)], ['الإجمالي', money(order.totalPiasters)], ...Object.entries(order.customer || {}).filter(([k]) => k !== 'name').map(([k,v]) => [customerLabels[k] || k, v])].map(([key, value]) => el('div', {}, el('small', {}, key), el('strong', {}, value || '—')))), errors);
+  const content = el('div', { class: 'dialog-body' }, el('div', { class: 'status-line space-bottom' }, badge(order.status), el('span', { class: 'subtle' }, date(order.createdAt))), el('div', { class: 'detail-meta' }, [['العميل', order.customer?.name], ['المنتج', productName(order.productId)], ...(prod?.material ? [['الخامة / الماتريال', prod.material]] : []), ['الكمية', number(order.quantity)], ['سعر القطعة', money(order.unitPricePiasters)], ['الشحن', money(order.shippingPiasters)], ['الإجمالي', money(order.totalPiasters)], ...(order.externalSync ? [['ربط الـ CRM', order.externalSync.success ? 'تم الإرسال بنجاح ✓' : 'فشل الإرسال']] : []), ...Object.entries(order.customer || {}).filter(([k]) => k !== 'name').map(([k,v]) => [customerLabels[k] || k, v])].map(([key, value]) => el('div', {}, el('small', {}, key), el('strong', {}, value || '—')))), errors);
   const actions = el('div', { class: 'button-row' });
   const move = async status => { try { await api(`/orders/${encodeURIComponent(order.id)}/status`, { method: 'PATCH', body: { status } }); dlg.close(); toast('اتحدثت حالة الأوردر'); await refresh(); } catch (error) { errors.replaceChildren(errorBox(error)); } };
   if (['draft', 'awaiting_confirmation'].includes(order.status)) actions.append(button('تسجيل موافقة العميل وتأكيد الطلب', () => { dlg.close(); confirmOrder(order); }, 'primary'));
+  if (['confirmed', 'preparing', 'shipped', 'delivered'].includes(order.status)) {
+    actions.append(button('إرسال للـ CRM الخارجي ↗', async () => {
+      try {
+        await api(`/orders/${encodeURIComponent(order.id)}/relay`, { method: 'POST' });
+        toast('تم إرسال الأوردر للـ CRM الخارجي بنجاح');
+        dlg.close();
+        await refresh();
+      } catch (err) {
+        errors.replaceChildren(errorBox(err));
+      }
+    }, 'small'));
+  }
   const transitions = { confirmed: ['preparing', 'cancelled'], preparing: ['shipped', 'cancelled'], shipped: ['delivered', 'returned'], delivered: ['returned'], draft: ['cancelled'], awaiting_confirmation: ['cancelled'] };
   for (const status of transitions[order.status] || []) actions.append(button(labels[status], () => { if (['cancelled', 'returned'].includes(status)) { if (!window.confirm(status === 'returned' ? 'سجّل المرتجع فقط بعد استلام القطع وفحصها؛ هيرجع المخزون. هل تم ده؟' : 'هل تريد إلغاء الطلب؟')) return; } move(status); }, status === 'cancelled' || status === 'returned' ? 'danger' : ''));
   content.append(actions, el('p', { class: 'footer-note' }, 'تغيير الحالة تسجيل داخلي؛ لا يرسل إشعارًا للعميل أو أمرًا لشركة الشحن.'));
@@ -712,6 +725,293 @@ const platformOptions = [
   { value: 'other', label: 'حساب / قناة أخرى' }
 ];
 
+function accountDialog(channel) {
+  dialog(channel ? 'تعديل بيانات حساب فيسبوك' : 'إضافة حساب فيسبوك جديد للأتمتة والتدفئة', () => el('div', { class: 'form-grid' },
+    field('اسم الحساب أو صاحبه', 'name', channel?.name, { required: true, full: true, placeholder: 'مثال: حساب منى 1 - ماركت بليس' }),
+    field('معرف البروفايل المعزول (Browser Profile)', 'browserProfileId', channel?.browserProfileId || `profile_${Math.floor(Math.random()*900)+100}`, { full: true, hint: 'كل حساب له مجلد بيانات متصفح معزول ومستقل لتجنب تتبع فيسبوك' }),
+    field('حساب الدخول (إيميل أو رقم موبايل)', 'loginAccount', channel?.loginAccount || channel?.phone, { dir: 'ltr', placeholder: 'user@example.com أو 01xxxxxxxxx' }),
+    selectField('حالة الحساب', 'accountStatus', [
+      { value: 'warming', label: '🔥 تحت التدفئة والتنشيط (تصفح، تفاعل، سكرول)' },
+      { value: 'ready', label: '✅ جاهز ومؤهل للنشر (ماركت بليس وجروبات)' },
+      { value: 'cooldown', label: '⏳ في فترة تبريد (Cooldown)' },
+      { value: 'checkpoint', label: '⚠️ محتاج فحص ومراجعة أمنية' }
+    ], channel?.accountStatus || 'warming'),
+    field('الحد اليومي لنشر الماركت بليس', 'dailyPostsLimit', channel?.dailyPostsLimit || 2, { type: 'number' }),
+    field('الحد اليومي لنشر الجروبات', 'dailyGroupsLimit', channel?.dailyGroupsLimit || 4, { type: 'number' }),
+    field('مؤشر ثقة الحساب (Trust Score %)', 'trustScore', channel?.trustScore || 85, { type: 'number', hint: 'من 0 إلى 100%' }),
+    field('ملاحظات وتخصص الحساب', 'notes', channel?.notes, { type: 'textarea', full: true, placeholder: 'مثال: حساب قديم من 2021 مخصص لجروبات الملابس والماركت بليس...' })
+  ), async data => {
+    const payload = {
+      name: data.get('name').trim(),
+      type: 'manual',
+      platform: 'facebook_marketplace',
+      browserProfileId: data.get('browserProfileId').trim(),
+      loginAccount: data.get('loginAccount').trim(),
+      accountStatus: data.get('accountStatus'),
+      dailyPostsLimit: Number(data.get('dailyPostsLimit')) || 2,
+      dailyGroupsLimit: Number(data.get('dailyGroupsLimit')) || 4,
+      trustScore: Number(data.get('trustScore')) || 85,
+      notes: data.get('notes').trim()
+    };
+    await mutate(channel ? `/channels/${encodeURIComponent(channel.id)}` : '/channels', channel ? 'PATCH' : 'POST', payload, 'اتحفظت بيانات الحساب بنجاح');
+  });
+}
+
+function groupHunterPanel() {
+  const panelEl = el('div', { class: 'panel' });
+  const keywordsHolder = el('div', { style: 'margin: 12px 0; display:flex; flex-wrap:wrap; gap:8px' });
+
+  const inputName = el('input', {
+    type: 'text',
+    placeholder: 'اكتب اسم المنتج (مثل: طرحة، عبايات، فساتين سواريه...)',
+    value: state.products[0]?.name || '',
+    style: 'flex:1; min-width:240px; padding:10px 14px; border:1px solid var(--line); border-radius:8px'
+  });
+
+  const searchBtn = button('🔍 استخراج الكلمات والبحث الذكي', async () => {
+    const pName = inputName.value.trim();
+    if (!pName) { toast('اكتب اسم المنتج أولاً'); return; }
+    searchBtn.disabled = true;
+    keywordsHolder.replaceChildren(el('div', { class: 'loading', style: 'padding:15px' }, 'جاري توليد الكلمات البحثية بالذكاء الاصطناعي (Vertex AI)...'));
+    try {
+      const res = await api('/automation/group-hunter/keywords', { method: 'POST', body: { productName: pName, count: 12 } });
+      const kwList = res.keywords || [];
+      keywordsHolder.replaceChildren(
+        el('strong', { style: 'display:block; width:100%; margin-bottom:6px; font-size:14px' }, `الكلمات المقترحة لـ "${pName}":`),
+        ...kwList.map(kw => el('button', {
+          class: 'btn small ghost',
+          style: 'background:#edf5f2; border-color:#d4eee5; color:#127d72; border-radius:20px; font-size:13px',
+          onclick: () => addGroupModal(kw)
+        }, `+ ${kw}`))
+      );
+    } catch (err) {
+      keywordsHolder.replaceChildren(el('p', { class: 'muted' }, 'فشل استخراج الكلمات. حاول مرة تانية.'));
+    } finally {
+      searchBtn.disabled = false;
+    }
+  }, 'primary');
+
+  const addGroupModal = (presetKeyword = '') => {
+    dialog('إضافة جروب فيسبوك جديد', () => el('div', { class: 'form-grid' },
+      field('اسم الجروب', 'name', '', { required: true, full: true, placeholder: 'مثال: سوق محجبات مصر للملابس والطرح' }),
+      field('رابط الجروب على فيسبوك', 'url', '', { required: true, type: 'url', dir: 'ltr', full: true, placeholder: 'https://www.facebook.com/groups/...' }),
+      selectField('نوع الجروب', 'type', [
+        { value: 'public', label: 'عامة (Public) - نشر مباشر' },
+        { value: 'private', label: 'خاصة (Private)' }
+      ], 'public'),
+      selectField('الموافقة على المنشورات', 'approval', [
+        { value: 'auto', label: 'نشر تلقائي بدون موافقة أدمن (Auto-approval)' },
+        { value: 'admin_review', label: 'موافقة أدمن مطلوبة' }
+      ], 'auto'),
+      field('عدد الأعضاء التقريبي', 'memberCount', 50000, { type: 'number' }),
+      field('الكلمة البحثية / المنتج', 'productKeyword', presetKeyword || inputName.value.trim(), { full: true }),
+      selectField('الحساب الموزع عليه', 'assignedChannelId', [
+        { value: '', label: 'بدون تخصيص (توزيع تلقائي لاحقاً)' },
+        ...state.channels.map(c => ({ value: c.id, label: c.name }))
+      ], '')
+    ), async data => {
+      await mutate('/groups', 'POST', {
+        name: data.get('name').trim(),
+        url: data.get('url').trim(),
+        type: data.get('type'),
+        approval: data.get('approval'),
+        memberCount: Number(data.get('memberCount')) || 0,
+        productKeyword: data.get('productKeyword').trim(),
+        assignedChannelId: data.get('assignedChannelId')
+      }, 'تمت إضافة الجروب بنجاح');
+    });
+  };
+
+  const distributeBtn = button('⚖️ توزيع الجروبات على الحسابات بالتساوي', async () => {
+    const activeChans = state.channels.filter(c => ['facebook_marketplace', 'facebook_groups'].includes(c.platform) || c.browserProfileId);
+    if (!activeChans.length) { toast('أضف حسابات فيسبوك أولاً لتوزيع الجروبات عليها'); return; }
+    if (!state.groups.length) { toast('لا توجد جروبات مسجلة بعد'); return; }
+    let updated = 0;
+    for (let i = 0; i < state.groups.length; i++) {
+      const g = state.groups[i];
+      const targetChan = activeChans[i % activeChans.length];
+      if (g.assignedChannelId !== targetChan.id) {
+        await api(`/groups/${encodeURIComponent(g.id)}`, { method: 'PATCH', body: { assignedChannelId: targetChan.id } });
+        updated++;
+      }
+    }
+    toast(`تم توزيع الجروبات بنجاح على ${activeChans.length} حسابات (${updated} تعديل)`);
+    await refresh();
+  }, 'ghost');
+
+  panelEl.append(
+    el('div', { class: 'panel-head' },
+      el('div', {},
+        el('h2', {}, 'صياد الجروبات الذكي (Vertex AI Group Hunter)'),
+        el('p', { class: 'muted' }, 'اكتب اسم المنتج والذكاء الاصطناعي هيولد مصطلحات البحث لاصطياد أفضل الجروبات وتوزيعها بمعدل 4-5 جروبات لكل حساب')
+      ),
+      el('div', { class: 'button-row' },
+        button('+ إضافة جروب يدوياً', () => addGroupModal(), 'small'),
+        distributeBtn
+      )
+    ),
+    el('div', { class: 'panel-body' },
+      el('div', { style: 'display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px' }, inputName, searchBtn),
+      keywordsHolder,
+      state.groups.length ? table(['اسم الجروب', 'النوع والموافقة', 'الأعضاء', 'الحساب المخصص', 'الحالة', ''], state.groups.map(g => [
+        el('div', {},
+          el('strong', {}, g.name),
+          g.url ? el('a', { href: g.url, target: '_blank', rel: 'noopener noreferrer', style: 'display:block; font-size:12px; color:var(--teal); direction:ltr' }, 'فتح الجروب ↗') : null
+        ),
+        el('div', {},
+          el('span', { class: 'badge', style: g.type === 'public' ? 'background:#e8f7f2;color:#117258' : 'background:#fef3c7;color:#92400e' }, g.type === 'public' ? 'عامة' : 'خاصة'),
+          el('span', { class: 'cell-sub' }, g.approval === 'auto' ? 'نشر فوري' : 'مراجعة أدمن')
+        ),
+        number(g.memberCount || 0),
+        state.channels.find(c => c.id === g.assignedChannelId)?.name || 'غير مخصص',
+        badge(g.status || 'active'),
+        button('حذف', async () => {
+          if (confirm(`حذف الجروب "${g.name}"؟`)) {
+            await api(`/groups/${encodeURIComponent(g.id)}`, { method: 'DELETE' });
+            toast('تم حذف الجروب');
+            await refresh();
+          }
+        }, 'small danger')
+      ])) : empty('مفيش جروبات مسجلة بعد', 'اكتب اسم المنتج واضغط "استخراج الكلمات" لاكتشاف وإضافة الجروبات المستهدفة.')
+    )
+  );
+  return panelEl;
+}
+
+function crmIntegrationPanel(crm) {
+  return panel('ربط الأوردرات بالـ CRM الخارجي (External API / Cashier Relay)', 'ترحيل الأوردرات فورياً لمنصة الكاشير أو السيستم الخارجي بمجرد تأكيد موافقة العميل في الشات',
+    el('div', { class: 'panel-body' },
+      el('form', {
+        class: 'form-grid',
+        onsubmit: async e => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          await mutate('/settings/crm', 'PUT', {
+            apiUrl: fd.get('apiUrl').trim(),
+            apiKey: fd.get('apiKey').trim(),
+            autoRelayOnConfirm: fd.has('autoRelayOnConfirm')
+          }, 'تم حفظ إعدادات ربط الـ CRM الخارجي بنجاح');
+        }
+      },
+        field('رابط الـ API الخارجي لتسجيل الأوردرات (Webhook / Endpoint URL)', 'apiUrl', crm.apiUrl || '', {
+          full: true, dir: 'ltr', type: 'url', placeholder: 'https://crm.fast-order-eg.tech/api/orders/webhook أو مسار الـ API الخاص بك'
+        }),
+        field('مفتاح المصادقة (Bearer Token / API Key)', 'apiKey', crm.apiKey || '', {
+          full: true, dir: 'ltr', placeholder: 'مثال: Bearer sk_live_... أو مفتاح الـ API'
+        }),
+        el('label', { class: 'check-label full space-top' },
+          el('input', { type: 'checkbox', name: 'autoRelayOnConfirm', checked: Boolean(crm.autoRelayOnConfirm) }),
+          'إرسال الأوردر للـ CRM الخارجي تلقائياً بمجرد تأكيد العميل واستخراج بياناته كاملة'
+        ),
+        el('div', { class: 'button-row full space-top' },
+          button('حفظ إعدادات الـ CRM', null, 'primary', { type: 'submit' }),
+          button('اختبار إرسال تجريبي (Test Connection)', async () => {
+            if (!crm.apiUrl) { toast('احفظ رابط الـ API أولاً قبل الاختبار'); return; }
+            toast('جاري تجربة الاتصال بالـ API الخارجي...');
+            try {
+              const testOrder = state.orders[0] || { id: 'ord_test_sample', customer: { name: 'عميل تجريبي', phone: '01012345678', address: 'مدينة نصر، القاهرة', governorate: 'القاهرة' }, productName: 'منتج تجريبي', totalPiasters: 25000 };
+              await api(`/orders/${testOrder.id || 'test'}/relay`, { method: 'POST', body: { apiUrl: crm.apiUrl, apiKey: crm.apiKey } });
+              toast('نجح الاتصال بالـ API الخارجي بنجاح! ✓');
+            } catch (err) {
+              toast(`فشل الاختبار: ${err.message}`);
+            }
+          }, 'ghost')
+        )
+      )
+    )
+  );
+}
+
+async function renderAutomation(main, version) {
+  const [mobileStatus, crmSettings] = await Promise.all([
+    api('/automation/mobile/status').catch(() => ({ devices: [], publicIp: null })),
+    api('/settings/crm').catch(() => ({ apiUrl: '', apiKey: '', autoRelayOnConfirm: false }))
+  ]);
+  if (version !== requestVersion) return;
+
+  const fbAccounts = state.channels.filter(c => ['facebook_marketplace', 'facebook_groups'].includes(c.platform) || c.browserProfileId);
+  const readyAccounts = fbAccounts.filter(c => c.accountStatus === 'ready').length;
+  const warmingAccounts = fbAccounts.filter(c => c.accountStatus !== 'ready').length;
+
+  const metrics = [
+    ['الحسابات الجاهزة للنشر', readyAccounts, 'حسابات مستقرة وتخطت مرحلة التدفئة', '✓'],
+    ['تحت التنشيط والتدفئة', warmingAccounts, 'تصفح وتفاعل طبيعي لرفع الـ Trust Score', '🔥'],
+    ['الجروبات المجمعة', state.groups.length, 'جروبات تم اصطيادها بـ Vertex AI', '☷'],
+    ['شبكة 4G والـ IP', mobileStatus.devices?.length ? `متصل (${mobileStatus.devices[0]})` : 'موبايل غير متصل', mobileStatus.publicIp ? `IP: ${mobileStatus.publicIp}` : 'وصل الموبايل عبر USB', '⚡']
+  ];
+
+  main.replaceChildren(
+    heading('أتمتة وحسابات فيسبوك (Facebook Automation Engine)', 'مزارع الحسابات، التدفئة والمحاكاة البشرية، صياد الجروبات بـ Vertex AI، وربط الـ CRM.',
+      el('div', { class: 'button-row' },
+        button('+ إضافة حساب فيسبوك', () => accountDialog(), 'primary'),
+        button('⚡ تدوير الـ IP الآن', async () => {
+          toast('جاري تفعيل وضع الطيران لتدوير الـ IP...');
+          try {
+            const res = await api('/automation/mobile/rotate-ip', { method: 'POST' });
+            if (res.changed) toast(`نجح تدوير الـ IP! الـ IP الجديد: ${res.newIp}`);
+            else if (res.skipped) toast(res.reason || 'الموبايل غير متصل عبر ADB');
+            else toast(`الـ IP الحالي: ${res.newIp || res.oldIp}`);
+            await refresh();
+          } catch (err) {
+            toast(`خطأ في التدوير: ${err.message}`);
+          }
+        }, 'ghost')
+      )
+    ),
+    el('div', { class: 'cards' }, metrics.map(([title, value, note, icon]) => el('section', { class: 'stat' },
+      el('div', { class: 'stat-top' }, title, el('span', { class: 'stat-icon', 'aria-hidden': true }, icon)),
+      el('div', { class: 'stat-value' }, typeof value === 'number' ? number(value) : value),
+      el('div', { class: 'stat-note' }, note)
+    ))),
+    
+    panel('حسابات فيسبوك ومحاكي التدفئة البشرية (Account Farming & Anti-Ban)', 'محاكاة كاملة للتصفح، السكرول، اللايكات، وقبول طلبات الصداقة لرفع Trust Score وتجنب الحظر',
+      fbAccounts.length ? table(['الحساب / الإيميل', 'بروفايل العزل', 'مؤشر الثقة (Trust)', 'الحالة', 'آخر تدفئة', ''], fbAccounts.map(acc => [
+        el('div', {}, el('strong', {}, acc.name), acc.phone || acc.loginAccount ? el('span', { class: 'cell-sub', dir: 'ltr' }, acc.phone || acc.loginAccount) : null),
+        el('span', { class: 'badge', style: 'background:#f0f4f8;color:#2c3e50' }, acc.browserProfileId || 'محلي معزول'),
+        el('div', { style: 'min-width:90px' },
+          el('div', { style: 'display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px' },
+            el('span', {}, `${acc.trustScore || 85}%`),
+            el('span', { style: 'color:var(--muted)' }, (acc.trustScore || 85) > 80 ? 'ممتاز' : 'متوسط')
+          ),
+          el('div', { style: 'height:6px;background:#eee;border-radius:3px;overflow:hidden' },
+            el('div', { style: `height:100%;width:${acc.trustScore || 85}%;background:${(acc.trustScore || 85) > 80 ? '#10b981' : '#f59e0b'}` })
+          )
+        ),
+        badge(acc.accountStatus || 'warming'),
+        acc.lastWarmedAt ? date(acc.lastWarmedAt) : 'لم يتم التنشيط بعد',
+        el('div', { class: 'button-row' },
+          button('🔥 تنشيط وتدفئة', async () => {
+            toast(`جاري فتح المتصفح وتدفئة الحساب "${acc.name}" بمحاكاة بشرية...`);
+            try {
+              const res = await api(`/automation/accounts/${encodeURIComponent(acc.id)}/warm`, { method: 'POST' });
+              if (res.result?.loggedIn) {
+                toast(`انتهت جلسة التدفئة بنجاح! (${res.result.scrolls} سكرول · ${res.result.likes} لايك)`);
+              } else {
+                toast('تنبيه: الحساب يحتاج تسجيل دخول في البروفايل لأول مرة.');
+              }
+              await refresh();
+            } catch (err) {
+              toast(`فشل التنشيط: ${err.message}`);
+            }
+          }, 'small primary'),
+          button('تعديل', () => accountDialog(acc), 'small'),
+          button('حذف', async () => {
+            if (confirm(`هل أنت متأكد من حذف الحساب "${acc.name}"؟`)) {
+              await api(`/channels/${encodeURIComponent(acc.id)}`, { method: 'DELETE' });
+              toast('تم حذف الحساب بنجاح');
+              await refresh();
+            }
+          }, 'small danger')
+        )
+      ])) : empty('مفيش حسابات فيسبوك مسجلة', 'أضف أول حساب فيسبوك لبدء التدفئة والنشر الآمن بدون حظر.', button('+ إضافة حساب فيسبوك', () => accountDialog(), 'primary'))
+    ),
+
+    groupHunterPanel(),
+
+    crmIntegrationPanel(crmSettings)
+  );
+}
+
 async function renderConnections(main, version) {
   const [events, botSettings] = await Promise.all([
     api('/events'),
@@ -735,7 +1035,16 @@ async function renderConnections(main, version) {
         platformLabels[c.platform] || (c.type === 'messenger' ? 'صفحة Messenger' : 'متابعة يدوية'),
         c.accountOwner || '—',
         badge(c.status),
-        button('تعديل', () => channelDialog(c), 'small')
+        el('div', { class: 'button-row' },
+          button('تعديل', () => channelDialog(c), 'small'),
+          button('حذف', async () => {
+            if (confirm(`هل أنت متأكد من حذف الحساب "${c.name}"؟`)) {
+              await api(`/channels/${encodeURIComponent(c.id)}`, { method: 'DELETE' });
+              toast('تم حذف الحساب بنجاح');
+              await refresh();
+            }
+          }, 'small danger')
+        )
       ])) : empty('مفيش حسابات مسجلة', 'سجل حسابات فيسبوك أو الماركت بليس أو الواتساب اللي بتنشر وترد منها.', button('إضافة حساب', () => channelDialog(), 'primary'))),
       panel('إعدادات الربط والذكاء الاصطناعي', '', el('div', { class: 'panel-body' },
         integrationRow('مساعد الردود', ['gemini', 'vertex'].includes(state.health.integrations?.ai) ? 'Vertex AI مهيّأ' : 'قواعد محلية', 'يجهّز مسودات ذكية تلتزم بتعليمات المتجر والمنتج.'),
@@ -771,6 +1080,13 @@ function channelDialog(channel) {
     selectField('المنصة / نوع الحساب', 'platform', platformOptions, channel?.platform || (channel?.type === 'messenger' ? 'messenger' : 'facebook_marketplace'), { full: true }),
     field('الموظف المسؤول عن الحساب', 'accountOwner', channel?.accountOwner, { placeholder: 'مثال: أحمد علي (مبيعات)' }),
     field('رقم الموبايل المرتبط بالحساب', 'phone', channel?.phone, { dir: 'ltr', placeholder: '01xxxxxxxxx' }),
+    field('معرف بروفايل المتصفح المعزول (Browser Profile)', 'browserProfileId', channel?.browserProfileId || '', { full: true, placeholder: 'profile_1 (يترك فارغاً للتوليد التلقائي)' }),
+    selectField('حالة نشاط الحساب', 'accountStatus', [
+      { value: 'warming', label: '🔥 تحت التدفئة والتنشيط' },
+      { value: 'ready', label: '✅ جاهز للنشر' },
+      { value: 'cooldown', label: '⏳ في فترة تبريد' },
+      { value: 'checkpoint', label: '⚠️ محتاج فحص ومراجعة' }
+    ], channel?.accountStatus || 'warming'),
     field('رابط الحساب أو البروفايل (URL)', 'accountUrl', channel?.accountUrl, { type: 'url', dir: 'ltr', full: true, placeholder: 'https://facebook.com/...' }),
     field('ملاحظات وتخصص الحساب', 'notes', channel?.notes, { type: 'textarea', full: true, placeholder: 'مثال: حساب مخصص لنشر التيشيرتات في جروبات أكتوبر والشيخ زايد...' }),
     channel?.type === 'messenger' ? field('رقم صفحة Meta (اختياري)', 'externalPageId', channel?.externalPageId, { full: true, dir: 'ltr' }) : null
@@ -783,6 +1099,8 @@ function channelDialog(channel) {
       platform,
       accountOwner: data.get('accountOwner').trim(),
       phone: data.get('phone').trim(),
+      browserProfileId: data.get('browserProfileId').trim(),
+      accountStatus: data.get('accountStatus'),
       accountUrl: data.get('accountUrl').trim(),
       notes: data.get('notes').trim(),
       ...(data.get('externalPageId')?.trim() ? { externalPageId: data.get('externalPageId').trim() } : {})
