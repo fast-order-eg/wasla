@@ -85,7 +85,9 @@ export async function launchBrowser({ profileId, profileName = 'Profile 1', driv
       '--disable-blink-features=AutomationControlled',
       '--disable-infobars',
       '--window-size=1280,850',
-      '--lang=ar-EG,ar,en-US,en'
+      '--lang=ar-EG,ar,en-US,en',
+      '--disable-features=WebRtcHideLocalIpsWithMdns',
+      '--force-webrtc-ip-handling-policy=default_public_interface_only'
     ],
     ignoreDefaultArgs: ['--enable-automation']
   });
@@ -105,10 +107,66 @@ export async function preparePage(browser) {
   const pages = await browser.pages();
   const page = pages.length > 0 ? pages[0] : await browser.newPage();
 
-  // إخفاء سمات الأتمتة (Stealth overrides)
+  // درع العزل المتقدم وتعديل البصمات الرقمية (Deep Anti-Fingerprinting Shield)
   await page.evaluateOnNewDocument(() => {
+    // 1. إخفاء راية الأتمتة
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
     window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
+    
+    // 2. محاكاة مواصفات الهاردوير والذاكرة
+    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
+    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+    Object.defineProperty(navigator, 'languages', { get: () => ['ar-EG', 'ar', 'en-US', 'en'] });
+
+    // 3. تشويش بصمة كارت الشاشة (WebGL Vendor & Renderer Spoofing)
+    const getParameterProto = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+      // UNMASKED_VENDOR_WEBGL
+      if (parameter === 37445) return 'Google Inc. (NVIDIA)';
+      // UNMASKED_RENDERER_WEBGL
+      if (parameter === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 SUPER Direct3D11 vs_5_0 ps_5_0, D3D11)';
+      return getParameterProto.apply(this, arguments);
+    };
+
+    if (window.WebGL2RenderingContext) {
+      const getParameter2Proto = WebGL2RenderingContext.prototype.getParameter;
+      WebGL2RenderingContext.prototype.getParameter = function(parameter) {
+        if (parameter === 37445) return 'Google Inc. (NVIDIA)';
+        if (parameter === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 SUPER Direct3D11 vs_5_0 ps_5_0, D3D11)';
+        return getParameter2Proto.apply(this, arguments);
+      };
+    }
+
+    // 4. تشويش بصمة الكانفاس (Canvas Noise Injection) لمنع تعقب FingerprintJS
+    const toDataURLProto = HTMLCanvasElement.prototype.toDataURL;
+    HTMLCanvasElement.prototype.toDataURL = function(...args) {
+      const context = this.getContext('2d');
+      if (context && this.width > 0 && this.height > 0) {
+        try {
+          const imgData = context.getImageData(0, 0, Math.min(10, this.width), Math.min(10, this.height));
+          // إضافة تشويش مجهري غير مرئي للعين
+          for (let i = 0; i < imgData.data.length; i += 4) {
+            imgData.data[i] = (imgData.data[i] + 1) % 256;
+          }
+          context.putImageData(imgData, 0, 0);
+        } catch {}
+      }
+      return toDataURLProto.apply(this, args);
+    };
+
+    // 5. تشويش بصمة كارت الصوت (AudioContext Jitter)
+    if (window.AudioBuffer) {
+      const getChannelDataProto = AudioBuffer.prototype.getChannelData;
+      AudioBuffer.prototype.getChannelData = function(...args) {
+        const data = getChannelDataProto.apply(this, args);
+        for (let i = 0; i < Math.min(data.length, 50); i += 10) {
+          data[i] += 0.0000001 * (Math.random() - 0.5);
+        }
+        return data;
+      };
+    }
+
+    // 6. الإذن والمحاكاة الطبيعية للإشعارات
     const originalQuery = window.navigator.permissions.query;
     window.navigator.permissions.query = parameters => (
       parameters.name === 'notifications' ?
