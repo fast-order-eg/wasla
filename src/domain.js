@@ -102,7 +102,7 @@ export function createServices(store, { assistant } = {}) {
           material:cleanText(data.material,'الخامة / الماتريال',500), materialsUrl:safeUrl(data.materialsUrl,'رابط ماتريال الصور والفيديو'),
           mediaVersions,
           botInstructions:cleanText(data.botInstructions,'تعليمات البوت الخاصة بالمنتج',5000),
-          pricePiasters:integer(data.pricePiasters,'السعر'), stock:integer(data.stock,'المخزون',0,1000000), active:data.active ?? true,
+          pricePiasters:integer(data.pricePiasters,'السعر'), stock:(data.stock === undefined || data.stock === null || data.stock === '') ? 999999 : integer(data.stock,'المخزون',0,1000000), active:data.active ?? true,
           requiredFields:[...new Set(fields)],variants, imageUrl:safeUrl(data.imageUrl || defaultImage,'رابط الصورة'), createdAt:old?.createdAt||now(),updatedAt:now()};
         await tx.put('products',record); await log(tx, old?'product_updated':'product_created', record.id); return record;
       });

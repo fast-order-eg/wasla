@@ -537,7 +537,7 @@ function renderProducts(main) {
         )
       ),
       money(p.pricePiasters),
-      `${number(p.stock)} قطعة`,
+      (p.stock && p.stock < 999999) ? `${number(p.stock)} قطعة` : el('span', { class: 'muted-note' }, 'غير محدود'),
       el('span', { class: `badge ${p.active !== false ? 'good' : ''}` }, p.active !== false ? 'متاح' : 'متوقف'),
       el('div', { class: 'button-row' },
         button('تعديل', () => productDialog(p), 'small'),
@@ -573,7 +573,7 @@ function productDialog(product) {
     field('اسم المنتج', 'name', product?.name, { required: true, full: true, maxlength: 180, placeholder: 'مثال: طاقيه كابيشوه 3 في 1' }),
     field('الخامة / الماتريال', 'material', product?.material, { full: true, placeholder: 'مثال: شيفون خفيف مع دنتيل شيك ناعم', hint: 'الخامة بتساعد المساعد الذكي يرد على أسئلة العملاء وتتكتب في مواصفات النشر.' }),
     field('السعر بالجنيه', 'price', product ? (product.pricePiasters / 100) : '', { type: 'number', min: 0, step: '.01', required: true, placeholder: '350.00' }),
-    field('المخزون المتوفر', 'stock', product ? product.stock : 10, { type: 'number', min: 0, step: 1, required: true }),
+    field('المخزون المتوفر (اختياري)', 'stock', (product?.stock && product.stock < 999999) ? product.stock : '', { type: 'number', min: 0, step: 1, required: false, placeholder: 'اتركه فارغاً لمخزون مفتوح غير محدود' }),
     mediaVersionsField(product),
     field('وصف المنتج وتفاصيل البيع', 'description', product?.description, { type: 'textarea', full: true, placeholder: 'اكتب مواصفات المنتج، وطريقة اللبس، ومميزات القطعة...' }),
     field('تعليمات الذكاء الاصطناعي', 'botInstructions', product?.botInstructions, { type: 'textarea', full: true, placeholder: 'اكتب هنا تعليماتك للبوت عن تفاصيل المنتج، أكواد الصور، العروض، كيفية الرد على المقاسات والألوان...' }),
@@ -599,7 +599,7 @@ function productDialog(product) {
       materialsUrl: data.get('materialsUrl')?.trim() || '',
       mediaVersions: parsedVersions,
       pricePiasters: Math.round(Number(data.get('price')) * 100),
-      stock: Number(data.get('stock')),
+      stock: data.get('stock') ? Number(data.get('stock')) : 999999,
       active: data.has('active'),
       requiredFields: [...new Set(selectedFields)],
       variants: data.get('variants').split(/[,،]/).map(s => s.trim()).filter(Boolean)
